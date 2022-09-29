@@ -74,7 +74,8 @@ def gw_distance(C1, C2, loss_fun, T, M=False, alpha=0):
 
 
 def spar_gw(C1, C2, a, b, loss_fun, nb_samples, epsilon, M=False, alpha=0,
-            max_iter=100, con_loop=0, stop_thr=1e-9, random_state=False):
+            solver='entropy', ipot_iter=10,
+            max_iter=100, stop_thr=1e-9, random_state=False, verbose=False):
     """
     The proposed Spar-GW (or Spar-FGW) algorithm.
 
@@ -98,10 +99,12 @@ def spar_gw(C1, C2, a, b, loss_fun, nb_samples, epsilon, M=False, alpha=0,
         feature distance matrix between source and target samples
     alpha : float, optional
         trade-off param. between struction and feature information
+    solver : string, optimal
+        regularization term, choose between 'entropy', 'proximal', and 'inexact-proximal'
+    ipot_iter : int, optional
+        number of inner Sinkhorn iterations for 'inexact-proximal'
     max_iter : int, optional
         max number of iterations
-    con_loop : int, optional
-        max number of low modifications of T
     stop_thr : float, optional
         stop threshold on error
     random_state : int, optional
@@ -122,8 +125,6 @@ def spar_gw(C1, C2, a, b, loss_fun, nb_samples, epsilon, M=False, alpha=0,
     mask = torch.bernoulli(torch.from_numpy(prob)).numpy()
     
     T = np.outer(a, b)
-    
-    continue_loop = 0
     
     if loss_fun in ["square_loss", "kl_loss"]:
         if isinstance(C1, np.ndarray):
@@ -163,12 +164,18 @@ def spar_gw(C1, C2, a, b, loss_fun, nb_samples, epsilon, M=False, alpha=0,
         Lik /= max_Lik
         
         # Importance sparsification of the kernel matrix in Sinkhorn iterations.
-        K = np.exp(-Lik/epsilon) * T
+        K = np.exp(-Lik/epsilon) 
         K_spar = np.zeros((len(a), len(b)))
         K_spar[mask!=0] = K[mask!=0]/prob[mask!=0]
-
+        
         try:
-            new_T = sinkhorn_plan(a, b, K_spar)
+            if solver == 'entropy':
+                new_T = sinkhorn_plan(a, b, K_spar)
+            elif solver == 'proximal':
+                K_spar = K_spar * T
+                new_T = sinkhorn_plan(a, b, K_spar)
+            elif solver == 'inexact-proximal':
+                new_T = ipot_plan(a, b, K_spar, ipot_iter)
         except (RuntimeWarning, UserWarning, ValueError, IndexError):
             print("Warning catched in Sinkhorn")
             T = np.nan
@@ -180,15 +187,19 @@ def spar_gw(C1, C2, a, b, loss_fun, nb_samples, epsilon, M=False, alpha=0,
             T = np.nan
             break
 
-        change_T = np.mean((T - new_T) ** 2)
         
-        if change_T <= stop_thr:
-            continue_loop += 1
-            if continue_loop > con_loop: 
+        if cpt % 10 == 0:
+            change_T = np.linalg.norm(T - new_T)
+            # change_T = np.mean((T - new_T) ** 2)
+
+            if verbose:
+                if cpt % 200 == 0:
+                    print('{:5s}|{:12s}'.format('It.', '||T_n - T_{n+1}||') + '\n' + '-' * 19)
+                print('{:5d}|{:8e}|'.format(cpt, change_T))
+
+            if change_T <= stop_thr:
                 T = np.copy(new_T)
                 break
-        else:
-            continue_loop = 0
             
         T = np.copy(new_T)
 
@@ -267,6 +278,97 @@ def sinkhorn_plan(a, b, K, max_iter=1000, stop_thr=1e-9):
         G_temp = u[:, None] * K * v[None, :]
     else:
         G_temp = u[:, None] * K.toarray() * v[None, :]
+    
+    G_temp2 = np.zeros((ns, dim_b))
+    G_temp2[id_row, ] = G_temp
+    G = np.zeros((ns, nt))
+    G[:, id_col] = G_temp2
+    
+    return G
+
+
+
+def ipot_plan(a, b, K, ipot_iter=10, max_iter=100, stop_thr=1e-9):
+    """
+    Approximate the exact optimal transport plan between a and b
+    using IPOT (Inexact Proximal Optimal Transport) method.
+    
+    Parameters
+    ----------
+    a : np.array
+        distribution in the source space
+    b : np.array
+        distribution in the target space
+    K : np.array
+        kernel matrix
+    ipot_iter : int, optional
+        number of inner Sinkhorn iterations
+    max_iter : int, optional
+        max number of iterations
+    stop_thr : float, optional
+        stop threshold on error
+
+    Returns
+    -------
+    G : np.array
+        transport plan
+    """
+    ns, nt = K.shape
+    
+    id_row = np.squeeze(np.asarray(np.where(np.sum(K, axis=1) != 0)))
+    id_col = np.squeeze(np.asarray(np.where(np.sum(K, axis=0) != 0)))
+    K = K[id_row, ][:, id_col]
+    a = a[id_row]
+    b = b[id_col]
+
+    dim_a, dim_b = K.shape
+    
+    G_temp = np.outer(a, b)
+    
+    u = np.ones(dim_a) / dim_a
+    v = np.ones(dim_b) / dim_b
+    
+    # if min(ns, nt) >= 200:
+    #     K = sparse.csr_matrix(K)
+
+    err = 1.
+    
+    for ii in range(max_iter):
+        uprev = u
+        vprev = v
+        newK = K * G_temp
+        
+        for jj in range(ipot_iter):
+            Kv = newK.dot(v)
+            u = a / Kv
+            Ktu = newK.T.dot(u)
+            v = b / Ktu
+        
+        G_temp = np.expand_dims(u,axis=1) * newK * np.expand_dims(v,axis=0)
+        
+        if (np.any(Ktu == 0)
+                or np.any(np.isnan(u)) or np.any(np.isnan(v))
+                or np.any(np.isinf(u)) or np.any(np.isinf(v))):
+            # we have reached the machine precision, come back to previous solution and quit loop
+            warnings.warn('Warning: numerical errors at iteration %d' % ii)
+            u = uprev
+            v = vprev
+            break
+        
+        if ii % 10 == 0:
+            # we can speed up the process by checking for the error only all
+            # the 10th iterations
+            err_u = abs(u - uprev).max() / max(abs(u).max(), abs(uprev).max(), 1.)
+            err_v = abs(v - vprev).max() / max(abs(v).max(), abs(vprev).max(), 1.)
+            err = 0.5 * (err_u + err_v)
+
+            if err < stop_thr:
+                break
+
+    if isinstance(newK, np.ndarray):
+        G_temp = u[:, None] * newK * v[None, :]
+    else:
+        G_temp = u[:, None] * newK.toarray() * v[None, :]
     
     G_temp2 = np.zeros((ns, dim_b))
     G_temp2[id_row, ] = G_temp
@@ -385,11 +487,13 @@ def sampled_gw(C1, C2, a, b, loss_fun, nb_samples_grad, epsilon, M=False, alpha=
 
 
 # Code is copied from github: Hv0nnus/Sampled-Gromov-Wasserstein/GROMOV_personal.py and modified for our setup.
-def entropic_gw(C1, C2, a, b, loss_fun, epsilon, M=False, alpha=0,
-                max_iter=100, stop_thr=1e-9, verbose=False, KL=False):
+def entropic_gw(C1, C2, a, b, loss_fun, epsilon, M=False, alpha=0, solver='entropy', 
+                max_iter=100, stop_thr=1e-9, verbose=False):
     """
-    EGW-based methods (EGW if KL=False and epsilon>0, PGA-GW if KL=True and epsilon>0, 
-                       and EMD-GW if KL=False and epsilon=0), adapted for being compatible with FGW.
+    EGW-based methods (EGW if solver='entropy' and epsilon>0; 
+                       PGA-GW if solver='proximal' (or 'inexact-proximal') and epsilon>0; 
+                       EMD-GW if epsilon=0), 
+    adapted for being compatible with FGW.
     """
     C1 = np.asarray(C1, dtype=np.float64)
     C2 = np.asarray(C2, dtype=np.float64)
@@ -415,15 +519,21 @@ def entropic_gw(C1, C2, a, b, loss_fun, epsilon, M=False, alpha=0,
         if alpha > 0:
             tens = (1-alpha) * M + alpha * tens / 2
 
-        if epsilon * KL > 0:
-            log_T = np.log(np.clip(T, np.exp(-200), 1))
-            log_T[log_T == -200] = -np.inf
-            tens = tens - epsilon * KL * log_T
-
         if epsilon > 0:
-            m = np.max(tens)
             try:
-                T = sinkhorn(a, b, tens/m, epsilon)
+                if solver == 'entropy':
+                    m = np.max(tens)
+                    T = sinkhorn(a, b, tens/m, epsilon)
+                elif solver == 'proximal':
+                    log_T = np.log(np.clip(T, np.exp(-200), 1))
+                    log_T[log_T == -200] = -np.inf
+                    tens = tens - epsilon * log_T
+                    m = np.max(tens)
+                    T = sinkhorn(a, b, tens/m, epsilon)
+                elif solver == 'inexact-proximal':
+                    m = np.max(tens)
+                    K = np.exp(-tens/(m*epsilon))
+                    T = ipot_plan(a, b, K)
             except:
                 print("The method is not converged. Return last stable T. Nb iter : " + str(cpt))
                 break

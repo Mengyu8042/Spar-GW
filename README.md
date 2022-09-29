@@ -16,27 +16,36 @@ If you use this toolbox in your research and find it useful, please cite:
 ## Introduction
 A brief introduction about the folders and files:
 * `methods/`: the proposed method and baselines;
+    * `LinearGromov/`: implementation of LR-GW for approximating GW;
     * `gromov_funcs.py`: implementation of EGW-based methods (EGW, PGA-GW, and EMD-GW), AE, SaGroW, and **Spar-GW** for approximating GW (and FGW);
-    * `GromovWassersteinFramework.py`, `GromovWassersteinGraphToolkit.py`: implementation of S-GWL and LR-GW for approximating GW;
+    * `GromovWassersteinFramework.py`, `GromovWassersteinGraphToolkit.py`: implementation of S-GWL for approximating GW;
     * `unbalanced_gromov_funcs.py`: implementation of EUGW, PGA-UGW, SaGroW, and **Spar-UGW** for UGW.
+* `results/`: precomputed results;
+    * `SYNTHETIC_dist_mat_spargw.mat`: a precomputed FGW distance matrix of the SYNTHETIC dataset, approximated by Spar-GW.
 * `data_simulators.py`: generate the used synthetic datasets, i.e., "Moon", "Graph", "Gaussian", or "Spiral".
-* `demo_gromov.ipynb`: an example of approximating the GW distance using different methods.
-* `graph_analysis.py`: an example of graph clustering and graph classification.
+* `demo_gw_distance.ipynb`: an example of approximating the GW distance using different methods.
+* `demo_graph_analysis.ipynb`: an example of graph clustering and graph classification.
 
-You can run `demo_gromov.ipynb` or `graph_analysis.py` to test our method.
+You can run `demo_gw_distance.ipynb` and `demo_graph_analysis.ipynb` to test our method for GW distance approximation and graph clustering/classification, respectively.
 
-## Main Dependencies
-Install the following requirements using the `pip` command:
-* matplotlib
-* networkx
-* numpy
-* pandas
-* POT
-* random
-* scipy
-* sklearn
-* torch
-* torch_geometric
+## Environments
+Python: 3.8.8
+
+Install the following dependencies using the `pip` command:
+
+| Name | Version |
+| ------ | ------ |
+| matplotlib | 3.5.2 |
+| ipykernel | 5.3.4 |
+| ipython | 7.22.0 |
+| networkx | 2.6.3 |
+| numpy | 1.21.5 |
+| pandas | 1.2.4 |
+| POT | 0.8.1.0 |
+| scikit-learn | 0.24.2 |
+| scipy | 1.8.0 |
+| torch | 1.10.1 |
+| torch-geometric | 2.0.4 |
 
 
 ## Acknowledgements
@@ -48,10 +57,11 @@ This toolbox has been created and is maintained by
 * [Hongteng Xu](https://github.com/HongtengXu): hongtengxu@ruc.edu.cn
 * [Cheng Meng](https://github.com/ChengzijunAixiaoli): chengmeng@ruc.edu.cn
 
-Feel free to contact us if any question.
+Feel free to contact us if any questions.
 
 ## Main References
 * https://pythonot.github.io/index.html
+* https://github.com/meyerscetbon/LinearGromov
 * https://github.com/HongtengXu/s-gwl
 * https://github.com/Hv0nnus/Sampled-Gromov-Wasserstein
 * https://github.com/thibsej/unbalanced_gromov_wasserstein

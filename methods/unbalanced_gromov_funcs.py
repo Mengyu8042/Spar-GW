@@ -14,7 +14,7 @@ import numpy as np
 from ot.utils import check_random_state
 from scipy import sparse
 import torch
-from gromov_funcs import init_matrix, init_matrix_sparse, gwggrad, gwloss, compute_L
+from methods.gromov_funcs import init_matrix, init_matrix_sparse, gwggrad, gwloss, compute_L
 
 
 def quad_kl_div(pi, ref):

@@ -8,12 +8,33 @@ from typing import Dict, Tuple
 from sklearn import datasets
 from ot.datasets import make_1D_gauss as gauss
 
+# https://github.com/trneedham/Spectral-Gromov-Wasserstein/blob/master/spectralGW.py
+# Create heat kernel matrix from precomputed eigenvalues/tangent_vectors
+def heat_kernel(lam,phi,t):
+    # Input: eigenvalues and eigenvectors for normalized Laplacian, time parameter t
+    # Output: heat kernel matrix
 
-def extract_graph_info(graph: nx.Graph) -> Tuple[np.ndarray, csr_matrix, Dict]:
+    u = np.matmul(phi,np.matmul(np.diag(np.exp(-t*lam)),phi.T))
+
+    return u
+
+def undirected_normalized_heat_kernel(G,t):
+    # Input: Graph G and time parameter t
+    # Output: heat kernel matrix
+    # Automatically computes directed laplacian matrix and then exponentiates
+
+    L = nx.normalized_laplacian_matrix(G).toarray()
+    lam, phi = np.linalg.eigh(L)
+    return heat_kernel(lam,phi,t)
+
+
+def extract_graph_info(graph: nx.Graph, method: str = 'adjacency') -> Tuple[np.ndarray, csr_matrix, Dict]:
     """
     Extract node distribution, adjacency matrix, and node index dictionary from networkx graph structure
     Args:
         graph: the graph instance generated via networkx
+        method: 'adjacency' or 'shortest_path' or 'heat_kernel'
+        
     Returns:
         probs: the distribution of nodes
         adj: adjacency matrix
@@ -22,8 +43,21 @@ def extract_graph_info(graph: nx.Graph) -> Tuple[np.ndarray, csr_matrix, Dict]:
     idx2node = {}
     for i in range(len(graph.nodes)):
         idx2node[i] = i
-
-    adj = nx.adjacency_matrix(graph)
+    
+    if method == 'adjacency':
+        adj = nx.adjacency_matrix(graph)
+        
+    elif method == 'shortest_path':
+        length_pair = dict(nx.all_pairs_shortest_path_length(graph))
+        n_node = len(length_pair)
+        adj = np.zeros((n_node, n_node))
+        for ii in range(n_node):
+            for jj in range(n_node):
+                adj[ii,jj] = length_pair[ii][jj]
+    
+    else:
+        adj = undirected_normalized_heat_kernel(graph, 1)
+    
     degrees = np.array(list(graph.degree))[:, 1]
     probs = degrees / np.sum(degrees)
     return probs, csr_matrix(adj), idx2node
@@ -82,7 +116,8 @@ def add_noisy_edges(graph: nx.graph, noisy_level: float) -> nx.graph:
 
 
 def graph_pair_simulator(n_nodes: int, clique_size: int, p_in: float = 0.4, p_out: float = 0.1,
-                         g_type: str = 'brp', noise_level: float = 0.05, noise_type: str = 'edge'):
+                         g_type: str = 'brp', noise_level: float = 0.05, noise_type: str = 'edge',
+                         method: str = 'adjacency'):
     """
     :param n_nodes: the number of nodes in the source graph
     :param clique_size: the number of nodes in a subgraph
@@ -91,6 +126,8 @@ def graph_pair_simulator(n_nodes: int, clique_size: int, p_in: float = 0.4, p_ou
     :param g_type: the type of graph "powerlaw" or "grp"
     :param noise_level: the percentage of noisy edges in a graph.
     :param noise_type: adding noisy edges or adding noisy nodes and edges
+    :param method: 'adjacency' or 'shortest_path' or 'heat_kernel'
+    
     :return:
     """
     if g_type == 'powerlaw':
@@ -106,13 +143,13 @@ def graph_pair_simulator(n_nodes: int, clique_size: int, p_in: float = 0.4, p_ou
         graph_dst = add_noisy_nodes(graph_dst, noise_level)
 
     # weights = np.random.rand(num_nodes[nn], num_nodes[nn]) + 1
-    p_s, cost_s, idx2node_s = extract_graph_info(graph_src)
-    p_t, cost_t, idx2node_t = extract_graph_info(graph_dst)
+    p_s, cost_s, idx2node_s = extract_graph_info(graph_src, method)
+    p_t, cost_t, idx2node_t = extract_graph_info(graph_dst, method)
     return p_s, p_t, cost_s, cost_t, idx2node_s, idx2node_t
 
 
 
-# Code for generating the SPIRAL dataset is copied from github: tvayer/SGW/blob/master/risgw_example.ipynb
+# Code of generating the SPIRAL dataset is copied from github: tvayer/SGW/blob/master/risgw_example.ipynb
 def make_spiral(n_samples, noise):
     
     n = np.sqrt(np.random.rand(n_samples,1)) * (3*np.pi)
@@ -125,7 +162,7 @@ def make_spiral(n_samples, noise):
 get_rot = lambda theta : np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta),np.cos(theta)]])
 
 
-def get_data(n_samples, theta, scale, transla, noise):
+def get_spiral_data(n_samples, theta, scale, transla, noise):
     
     Xs = make_spiral(n_samples, noise) - transla
     Xt = make_spiral(n_samples, noise)
@@ -137,10 +174,12 @@ def get_data(n_samples, theta, scale, transla, noise):
 
 
 
-def data_generator(name: str, n_sample: int):
+def data_generator(name: str, n_sample: int, method: str = 'adjacency'):
     """
     :param name: the name of synthetic dataset "moon", "graph", "gaussian", or "spiral"
     :param n_sample: the number of points/nodes in source or target samples
+    :param method: 'adjacency' or 'shortest_path' or 'heat_kernel' (only work if name=='graph')
+    
     :return: 
         source and target distributions (a, b)
         source and target relation matrices (C1, C2: np.array; cost_s, cost_t: csr_matrix)
@@ -149,16 +188,6 @@ def data_generator(name: str, n_sample: int):
         noisy_moons = datasets.make_moons(n_samples=2*n_sample, noise=0.1)
         xs = noisy_moons[0][noisy_moons[1]==0]
         xt = noisy_moons[0][noisy_moons[1]==1]
-        
-        a = gauss(n_sample, m=n_sample/3, s=n_sample/20)  # m=mean, s=std
-        b = gauss(n_sample, m=n_sample/2, s=n_sample/20)  # m=mean, s=std
-        
-        C1 = sp.spatial.distance.cdist(xs, xs)
-        C2 = sp.spatial.distance.cdist(xt, xt)
-        C1 /= np.max(C1)
-        C2 /= np.max(C2)
-        cost_s = csr_matrix(C1)
-        cost_t = csr_matrix(C2)
     
     elif name == 'graph':
         a, b, cost_s, cost_t, idx2node_s, idx2node_t = graph_pair_simulator(
@@ -168,7 +197,8 @@ def data_generator(name: str, n_sample: int):
             p_out=0.02,
             g_type='powerlaw',  # 'powerlaw' or 'grp'
             noise_level = 0.2,
-            noise_type='edge')  # 'edge' or 'edge+node'
+            noise_type='edge',  # 'edge' or 'edge+node'
+            method=method)
         
         a = a**3
         b = b**3
@@ -196,29 +226,20 @@ def data_generator(name: str, n_sample: int):
         mu2 = np.tile(2, dt)
         xt = np.random.multivariate_normal(mu1, np.eye(dt), int(n_sample/2))
         xt = np.vstack([xt, np.random.multivariate_normal(mu2, np.eye(dt), n_sample-int(n_sample/2))])
-        
-        a = gauss(n_sample, m=n_sample/3, s=n_sample/20)  # m=mean, s=std
-        b = gauss(n_sample, m=n_sample/2, s=n_sample/20)  # m=mean, s=std
-        
-        C1 = sp.spatial.distance.cdist(xs, xs)
-        C2 = sp.spatial.distance.cdist(xt, xt)
-        C1 /= np.max(C1)
-        C2 /= np.max(C2)
-        cost_s = csr_matrix(C1)
-        cost_t = csr_matrix(C2)
-    
-    else:
-        xs, xt = get_data(n_sample, theta=np.pi/4, scale=1, transla=10, noise=1)
-        
-        a = gauss(n_sample, m=n_sample/3, s=n_sample/20)  # m=mean, s=std
-        b = gauss(n_sample, m=n_sample/2, s=n_sample/20)  # m=mean, s=std
-        
-        C1 = sp.spatial.distance.cdist(xs, xs)
-        C2 = sp.spatial.distance.cdist(xt, xt)
-        C1 /= np.max(C1)
-        C2 /= np.max(C2)
-        cost_s = csr_matrix(C1)
-        cost_t = csr_matrix(C2)
+
+    elif name == 'spiral':
+        xs, xt = get_spiral_data(n_sample, theta=np.pi/4, scale=1, transla=10, noise=1)
 
     
+    if name != 'graph':
+        a = gauss(n_sample, m=n_sample/3, s=n_sample/20)  # m=mean, s=std
+        b = gauss(n_sample, m=n_sample/2, s=n_sample/20)  # m=mean, s=std
+        
+        C1 = sp.spatial.distance.cdist(xs, xs)
+        C2 = sp.spatial.distance.cdist(xt, xt)
+        C1 /= np.max(C1)
+        C2 /= np.max(C2)
+        cost_s = csr_matrix(C1)
+        cost_t = csr_matrix(C2)
+        
     return a, b, C1, C2, cost_s, cost_t

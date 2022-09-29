@@ -19,6 +19,7 @@ from typing import List, Dict, Tuple
 def compute_L(C1, C2, loss_fun, T):
     if isinstance(C1, np.ndarray) == False:
         C1 = C1.toarray()
+    if isinstance(C2, np.ndarray) == False:
         C2 = C2.toarray()
         
     s = 0
