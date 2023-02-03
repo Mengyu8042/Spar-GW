@@ -10,10 +10,7 @@ recursive graph matching ->
     then calculate the Wasserstein barycenter of each sub-graph pair
 """
 
-import os
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-
-import methods.GromovWassersteinFramework as Gwl
+import methods.SGWL.GromovWassersteinFramework as Gwl
 import numpy as np
 from scipy.sparse import csr_matrix
 from typing import List, Dict, Tuple

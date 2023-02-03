@@ -4,9 +4,6 @@
 Unbalanced Gromov-Wasserstein approximation methods (Spar-UGW, SaGroW, EUGW, and PGA-UGW)
 """
 
-import os
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -15,6 +12,7 @@ from ot.utils import check_random_state
 from scipy import sparse
 import torch
 from methods.gromov_funcs import init_matrix, init_matrix_sparse, gwggrad, gwloss, compute_L
+
 
 
 def quad_kl_div(pi, ref):
@@ -89,6 +87,7 @@ def ugw_distance(C1, C2, loss_fun, T, a, b, lam):
 
 
 
+#%% Spar-UGW
 def spar_ugw(C1, C2, a, b, loss_fun, nb_samples, epsilon, lam, 
              max_iter=100, con_loop=0, stop_thr=1e-9, random_state=False):
     """
@@ -115,7 +114,7 @@ def spar_ugw(C1, C2, a, b, loss_fun, nb_samples, epsilon, lam,
     max_iter : int, optional
         max number of iterations
     con_loop : int, optional
-        max number of low modifications of T
+        number of minor modifications of T
     stop_thr : float, optional
         stop threshold on error
     random_state : int, optional
@@ -200,7 +199,7 @@ def spar_ugw(C1, C2, a, b, loss_fun, nb_samples, epsilon, lam,
                 + lam * np.sum(np.sum(T, axis=0) * np.log(np.sum(T, axis=0) / b + 1e-20))
             )
 
-        # Importance sparsification of the kernel matrix in Sinkhorn iterations.
+        # Importance sparsification of the kernel matrix.
         K = np.exp(-Lik/eps_temp) * T
         K_spar = np.zeros((len(a), len(b)))
         K_spar[mask!=0] = K[mask!=0]/prob[mask!=0] 
@@ -231,6 +230,7 @@ def spar_ugw(C1, C2, a, b, loss_fun, nb_samples, epsilon, lam,
         T = np.copy(new_T)
 
     return T
+
 
 
 def sinkhorn_plan_unbalanced(a, b, K, reg, reg_kl, max_iter=1000, stop_thr=1e-9):
@@ -321,6 +321,7 @@ def sinkhorn_plan_unbalanced(a, b, K, reg, reg_kl, max_iter=1000, stop_thr=1e-9)
 
 
 
+#%% SaGroW
 # Code is copied from POT and modified for our setup.
 def sampled_ugw(C1, C2, a, b, loss_fun, nb_samples_grad, epsilon, lam, learning_step=0.8, KL=False, 
                 max_iter=100, con_loop=50, stop_thr=1e-9, verbose=False, random_state=False):
@@ -437,6 +438,7 @@ def sampled_ugw(C1, C2, a, b, loss_fun, nb_samples_grad, epsilon, lam, learning_
     
 
 
+#%% EUGW-based methods (EUGW and PGA-UGW)
 # Code is copied from github: Hv0nnus/Sampled-Gromov-Wasserstein/GROMOV_personal.py and modified for our setup.
 def entropic_ugw(C1, C2, a, b, loss_fun, epsilon, lam, 
                  max_iter=100, stop_thr=1e-9, KL=False, quad=False, verbose=False):

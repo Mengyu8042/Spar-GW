@@ -4,9 +4,6 @@
 (Fused) Gromov-Wasserstein approximation methods (Spar-GW, SaGroW, EGW-based, and AE)
 """
 
-import os
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -17,6 +14,7 @@ from ot.lp import emd, emd2_1d
 from scipy import sparse
 from scipy.sparse import csr_matrix
 import torch
+
 
 
 def gw_distance(C1, C2, loss_fun, T, M=False, alpha=0):
@@ -72,7 +70,7 @@ def gw_distance(C1, C2, loss_fun, T, M=False, alpha=0):
     return gw_dist
     
 
-
+#%% Spar-GW
 def spar_gw(C1, C2, a, b, loss_fun, nb_samples, epsilon, M=False, alpha=0,
             solver='entropy', ipot_iter=10,
             max_iter=100, stop_thr=1e-9, random_state=False, verbose=False):
@@ -134,6 +132,7 @@ def spar_gw(C1, C2, a, b, loss_fun, nb_samples, epsilon, M=False, alpha=0,
 
     for cpt in range(max_iter):
         
+        # Update the cost matrix.
         if loss_fun in ["square_loss", "kl_loss"]:
             Lik = gwggrad(constC, hC1, hC2, T) / 2
             
@@ -163,11 +162,12 @@ def spar_gw(C1, C2, a, b, loss_fun, nb_samples, epsilon, M=False, alpha=0,
             continue
         Lik /= max_Lik
         
-        # Importance sparsification of the kernel matrix in Sinkhorn iterations.
+        # Importance sparsification of the kernel matrix.
         K = np.exp(-Lik/epsilon) 
         K_spar = np.zeros((len(a), len(b)))
         K_spar[mask!=0] = K[mask!=0]/prob[mask!=0]
         
+        # Solve the subproblem.
         try:
             if solver == 'entropy':
                 new_T = sinkhorn_plan(a, b, K_spar)
@@ -190,7 +190,6 @@ def spar_gw(C1, C2, a, b, loss_fun, nb_samples, epsilon, M=False, alpha=0,
         
         if cpt % 10 == 0:
             change_T = np.linalg.norm(T - new_T)
-            # change_T = np.mean((T - new_T) ** 2)
 
             if verbose:
                 if cpt % 200 == 0:
@@ -204,6 +203,7 @@ def spar_gw(C1, C2, a, b, loss_fun, nb_samples, epsilon, M=False, alpha=0,
         T = np.copy(new_T)
 
     return T
+
 
 
 def sinkhorn_plan(a, b, K, max_iter=1000, stop_thr=1e-9):
@@ -379,6 +379,7 @@ def ipot_plan(a, b, K, ipot_iter=10, max_iter=100, stop_thr=1e-9):
 
 
 
+#%% SaGroW
 # Code is copied from POT and modified for our setup.
 def sampled_gw(C1, C2, a, b, loss_fun, nb_samples_grad, epsilon, M=False, alpha=0, learning_step=0.8, KL=False, 
                max_iter=100, con_loop=50, stop_thr=1e-9, verbose=False, random_state=False):
@@ -486,6 +487,7 @@ def sampled_gw(C1, C2, a, b, loss_fun, nb_samples_grad, epsilon, M=False, alpha=
 
 
 
+#%% EGW-based methods (EGW, PGA-GW, and EMD-GW)
 # Code is copied from github: Hv0nnus/Sampled-Gromov-Wasserstein/GROMOV_personal.py and modified for our setup.
 def entropic_gw(C1, C2, a, b, loss_fun, epsilon, M=False, alpha=0, solver='entropy', 
                 max_iter=100, stop_thr=1e-9, verbose=False):
@@ -555,6 +557,7 @@ def entropic_gw(C1, C2, a, b, loss_fun, epsilon, M=False, alpha=0, solver='entro
         cpt += 1
 
     return T
+
 
 
 def compute_L(C1, C2, loss_fun, T):
@@ -651,6 +654,7 @@ def define_loss_function(loss_func_name, GPU=False):
 
 
 
+#%% AE
 def anchor_energy(C1, C2, a, b, p_order=2, method='1d', epsilon=1, max_iter=100, stop_thr=1e-6):
     """
     AE method.
@@ -660,12 +664,11 @@ def anchor_energy(C1, C2, a, b, p_order=2, method='1d', epsilon=1, max_iter=100,
     
     ae_dist = 0
     
-    if method == '1d':
-        for i in range(n_s):
-            for j in range(n_t):
-                if p_order == 2:
-                    ae_dist += a[i] * b[j] * emd2_1d(C1[i,], C2[:,j], a, b, metric='sqeuclidean')
-                else:
-                    ae_dist += a[i] * b[j] * emd2_1d(C1[i,], C2[:,j], a, b, metric='minkowski') 
+    for i in range(n_s):
+        for j in range(n_t):
+            if p_order == 2:
+                ae_dist += a[i] * b[j] * emd2_1d(C1[i,], C2[:,j], a, b, metric='sqeuclidean')
+            else:
+                ae_dist += a[i] * b[j] * emd2_1d(C1[i,], C2[:,j], a, b, metric='minkowski') 
                     
     return ae_dist

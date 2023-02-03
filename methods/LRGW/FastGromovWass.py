@@ -1,7 +1,7 @@
 import numpy as np
 import time
-from methods.LinearGromov import LinSinkhorn
-from methods.LinearGromov import utils
+from methods.LRGW import LinSinkhorn
+from methods.LRGW import utils
 from sklearn.cluster import KMeans
 from sklearn import preprocessing
 import types

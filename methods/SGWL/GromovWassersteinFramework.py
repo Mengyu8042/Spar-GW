@@ -6,9 +6,6 @@ Basic functionalities include:
 2) Gromov-Wasserstein barycenter (for graph matching)
 """
 
-import os
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-
 import copy
 import numpy as np
 from scipy.sparse import csr_matrix

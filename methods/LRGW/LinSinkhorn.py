@@ -1,4 +1,4 @@
-from methods.LinearGromov import utils
+from methods.LRGW import utils
 import numpy as np
 import time
 from sklearn.cluster import KMeans

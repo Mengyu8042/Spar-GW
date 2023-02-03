@@ -8,24 +8,18 @@ from typing import Dict, Tuple
 from sklearn import datasets
 from ot.datasets import make_1D_gauss as gauss
 
-# https://github.com/trneedham/Spectral-Gromov-Wasserstein/blob/master/spectralGW.py
-# Create heat kernel matrix from precomputed eigenvalues/tangent_vectors
-def heat_kernel(lam,phi,t):
-    # Input: eigenvalues and eigenvectors for normalized Laplacian, time parameter t
-    # Output: heat kernel matrix
 
-    u = np.matmul(phi,np.matmul(np.diag(np.exp(-t*lam)),phi.T))
-
-    return u
-
-def undirected_normalized_heat_kernel(G,t):
+#%% Functions for generating graphs
+def undirected_normalized_heat_kernel(G, t):
     # Input: Graph G and time parameter t
     # Output: heat kernel matrix
     # Automatically computes directed laplacian matrix and then exponentiates
+    # Copied from github: trneedham/Spectral-Gromov-Wasserstein/blob/master/spectralGW.py
 
     L = nx.normalized_laplacian_matrix(G).toarray()
     lam, phi = np.linalg.eigh(L)
-    return heat_kernel(lam,phi,t)
+    heat_kernel = np.matmul(phi, np.matmul(np.diag(np.exp(-t*lam)), phi.T))
+    return heat_kernel
 
 
 def extract_graph_info(graph: nx.Graph, method: str = 'adjacency') -> Tuple[np.ndarray, csr_matrix, Dict]:
@@ -149,6 +143,7 @@ def graph_pair_simulator(n_nodes: int, clique_size: int, p_in: float = 0.4, p_ou
 
 
 
+#%% Functions for generating spriral-type data points
 # Code of generating the SPIRAL dataset is copied from github: tvayer/SGW/blob/master/risgw_example.ipynb
 def make_spiral(n_samples, noise):
     
@@ -174,6 +169,7 @@ def get_spiral_data(n_samples, theta, scale, transla, noise):
 
 
 
+#%% Summarized function for generating sythetic datasets
 def data_generator(name: str, n_sample: int, method: str = 'adjacency'):
     """
     :param name: the name of synthetic dataset "moon", "graph", "gaussian", or "spiral"
@@ -182,7 +178,7 @@ def data_generator(name: str, n_sample: int, method: str = 'adjacency'):
     
     :return: 
         source and target distributions (a, b)
-        source and target relation matrices (C1, C2: np.array; cost_s, cost_t: csr_matrix)
+        source and target relation matrices (C1, C2: np.array)
     """
     if name == 'moon':
         noisy_moons = datasets.make_moons(n_samples=2*n_sample, noise=0.1)
@@ -239,7 +235,5 @@ def data_generator(name: str, n_sample: int, method: str = 'adjacency'):
         C2 = sp.spatial.distance.cdist(xt, xt)
         C1 /= np.max(C1)
         C2 /= np.max(C2)
-        cost_s = csr_matrix(C1)
-        cost_t = csr_matrix(C2)
         
-    return a, b, C1, C2, cost_s, cost_t
+    return a, b, C1, C2
