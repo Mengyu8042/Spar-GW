@@ -1,4 +1,4 @@
-# Efficient Approximation of Gromov-Wasserstein Distance using Importance Sparsification
+# Efficient Approximation of Gromov-Wasserstein Distance Using Importance Sparsification
 This repository includes the implementation of our work **"Efficient Approximation of Gromov-Wasserstein Distance Using Importance Sparsification"** [https://doi.org/10.1080/10618600.2023.2165500].
 
 ![spar-gw](figures/spar-gw.PNG)
