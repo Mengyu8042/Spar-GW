@@ -36,7 +36,8 @@ A brief introduction about the folders and files:
 
 
 ## Requirements
-Python: 3.10.8
+* Python: 3.10 (validated with 3.10.8)
+* Conda (recommended)
 
 You can create and activate the environment by running the following command:
 
@@ -44,10 +45,24 @@ You can create and activate the environment by running the following command:
     conda activate newenv
 
 Please run the following command under the `setup/` path to install the required packages:
-    
+
+#### Windows
+
     pip install -r requirements.txt
     pip install torch_sparse-0.6.15-cp310-cp310-win_amd64.whl
     pip install torch_scatter-2.0.9-cp310-cp310-win_amd64.whl
+
+#### Linux / macOS
+
+    pip install -r requirements.txt
+    pip install torch_sparse -f https://data.pyg.org/whl/torch-1.13.0+cpu.html
+    pip install torch_scatter -f https://data.pyg.org/whl/torch-1.13.0+cpu.html
+
+
+> **Note**
+>
+> * The wheel links above target the CPU build of PyTorch 1.13.
+> * If you are using a different PyTorch version or a CUDA build, replace the URLs with the matching wheels from [https://data.pyg.org](https://data.pyg.org).
 
 
 ## Reproducibility
